@@ -14,7 +14,7 @@ openai_api_key = os.getenv('OPENAI_API_KEY')
 client = openai.OpenAI(api_key=openai_api_key)
 
 # MongoDB Atlas configuration
-mongodb_uri = "mongodb+srv://dhruv:dhruv1234@cluster0.fhkve.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+mongodb_uri = "your_mongodb_uri"
 client_mongo = MongoClient(mongodb_uri)
 db = client_mongo.rosewalt_db
 collection = db.call_analysis
