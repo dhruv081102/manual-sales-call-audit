@@ -152,7 +152,7 @@ Transcription:
 
 
 Please format your response as a valid JSON object. Ensure that all property names and values are enclosed in double quotes, and do not include any extraneous characters or newlines outside the JSON object.
-Also make sure to give scores value of each aspect in the feebback along with their explanation and do not use the sentences to show the score.
+Also make sure to give a detailed feedback for each aspect it should show the score of each aspects first as an object then give a detailed explanation how the salesperson performed for each part of the aspect on the basis of how well did they do, where they lacked, and how they could improve.
 Response JSON:
 
     "pitch_followed": <score>,
@@ -166,7 +166,7 @@ Response JSON:
     "closing_skills": <score>,
     "Overall_Score": <score>,
     "conclusion": "<detailed_feedback>"
-    "feedback": "<detailed feedback for each aspect along with the score value of each aspects on how the salesperson performed for each part of the aspect and explain what they did well, where they lacked, and how they could improve>
+    "feedback": "<detailed feedback for each aspect it should show the score of each aspects first then give a detailed explanation how the salesperson performed for each part of the aspect on the basis of how well did they do, where they lacked, and how they could improve>
 """
 
     try:
