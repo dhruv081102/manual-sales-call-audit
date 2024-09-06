@@ -14,7 +14,7 @@ client1 = openai.OpenAI(api_key=openai_api_key)
 
 
 # MongoDB connection details
-mongodb_uri = "mongodb+srv://dhruv:dhruv1234@cluster0.fhkve.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+mongodb_uri = "mongodb+srv://<username>:<password>@cluster0.fhkve.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 database_name = "rosewalt_db"
 collection_name = "automate"
 
@@ -24,8 +24,8 @@ collection_name = "automate"
 url = "https://kpi.knowlarity.com/Basic/v1/account/calllog?start_time=2024-08-28%2012%3A44%3A06%2B05%3A30&end_time=2024-08-29%2012%3A44%3A06%2B05%3A30"
 
 headers = {
-    'authorization': "8005d0a9-f1f2-4489-95ab-70c9538acfbb",
-    'x-api-key': "QdQa83awS05tyB0KAVATX7tvm3WuBXz16QEluhix"
+    'authorization': "your authorization/sr key",
+    'x-api-key': "your x-api-key"
 }
 
 # Function to sanitize filenames
