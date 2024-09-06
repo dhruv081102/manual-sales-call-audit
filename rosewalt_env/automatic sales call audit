@@ -145,7 +145,7 @@ For each of the following aspects:
 - objection_handling
 - closing_skills
 
-Provide a detailed conclusion that includes feedback on how the salesperson performed in each aspect. For each part of the aspect, explain what they did well, where they lacked, and how they could improve.
+Provide a detailed conclusion that includes feedback in pointer along with the score on each aspects and how the salesperson performed for each part of the aspect give score and explain what they did well, where they lacked, and how they could improve.
 
 Transcription:
 "{text}"
@@ -166,7 +166,7 @@ Response JSON:
     "closing_skills": <score>,
     "Overall_Score": <score>,
     "conclusion": "<detailed_feedback>"
-
+    "feedback": "<detailed feedback for each aspect along with the score of each aspects on how the salesperson performed for each part of the aspect and explain what they did well, where they lacked, and how they could improve>
 """
 
     try:
