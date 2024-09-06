@@ -14,16 +14,18 @@ client1 = openai.OpenAI(api_key=openai_api_key)
 
 
 # MongoDB connection details
-mongodb_uri = "your mongodb uri"
+mongodb_uri = "mongodb+srv://dhruv:dhruv1234@cluster0.fhkve.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 database_name = "rosewalt_db"
 collection_name = "automate"
 
 
+
 # URL and headers for the Knowlarity API
-url = "your super receptionist api"
+url = "https://kpi.knowlarity.com/Basic/v1/account/calllog?start_time=2024-08-28%2012%3A44%3A06%2B05%3A30&end_time=2024-08-29%2012%3A44%3A06%2B05%3A30"
+
 headers = {
-    'authorization': "your sr key",
-    'x-api-key': "your x-api-key"
+    'authorization': "8005d0a9-f1f2-4489-95ab-70c9538acfbb",
+    'x-api-key': "QdQa83awS05tyB0KAVATX7tvm3WuBXz16QEluhix"
 }
 
 # Function to sanitize filenames
@@ -74,8 +76,11 @@ def transcribe_audio(file_path, openai_api_key):
         else:
             error_message = response.json().get('error', {}).get('message', 'Unknown error')
             raise Exception(f"Error transcribing audio file: {error_message}")
-
-# Function to evaluate transcription using OpenAI
+def clean_json_string(json_string):
+    # Ensure proper double quotes around property names
+    json_string = re.sub(r'(?<!\\)\'', '\"', json_string)  # Replace single quotes with double quotes
+    json_string = json_string.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+    return json_string
 def evaluate_transcription_with_openai(text):
     import traceback
     tools = [
@@ -96,7 +101,7 @@ def evaluate_transcription_with_openai(text):
                         "communication_skills": {"type": "integer", "description": "This includes the clarity, tone, pace, use of persuasive language, and active listening."},
                         "objection_handling": {"type": "integer", "description": "This measures the representative's ability to address customer objections effectively."},
                         "closing_skills": {"type": "integer", "description": "This measures the representative's ability to guide the conversation towards a sale or next step."},
-                        "Overall Score": {"type": "integer", "description": "Your ultimate goal is to evaluate all the scores and give them an overall score."},
+                        "Overall_Score": {"type": "float", "description": "Your ultimate goal is to evaluate all the scores and give them an overall score."},
                         "conclusion": {"type": "string", "description": "Your ultimate goal is to evaluate the salesperson's performance and give them points for improvement."}
                     },
                     "additionalProperties": False,
@@ -110,7 +115,7 @@ def evaluate_transcription_with_openai(text):
                         "communication_skills",
                         "objection_handling",
                         "closing_skills",
-                        "Overall Score",
+                        "Overall_Score",
                         "conclusion"
                     ]
                 },
@@ -140,17 +145,33 @@ For each of the following aspects:
 - objection_handling
 - closing_skills
 
-Provide a detailed conclusion that includes feedback on how the salesperson performed in each aspect. For each part, explain what they did well, where they lacked, and how they could improve.
+Provide a detailed conclusion that includes feedback on how the salesperson performed in each aspect. For each part of the aspect, explain what they did well, where they lacked, and how they could improve.
 
 Transcription:
 "{text}"
 
-Use the provided tool and output the evaluation as JSON.
+
+Please format your response as a valid JSON object. Ensure that all property names and values are enclosed in double quotes, and do not include any extraneous characters or newlines outside the JSON object.
+
+Response JSON:
+
+    "pitch_followed": <score>,
+    "confidence": <score>,
+    "tonality": <score>,
+    "energy": <score>,
+    "enthusiasm": <score>,
+    "customer_understanding": <score>,
+    "communication_skills": <score>,
+    "objection_handling": <score>,
+    "closing_skills": <score>,
+    "Overall_Score": <score>,
+    "conclusion": "<detailed_feedback>"
+
 """
 
     try:
         response = client1.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": tool_prompt},
                 {"role": "user", "content": prompt}
@@ -160,26 +181,179 @@ Use the provided tool and output the evaluation as JSON.
         )
         
         message_content = response.choices[0].message.content
-
-        # Clean the response to extract JSON
+        print(message_content)
+        
         try:
-            # Find the JSON part in the response
-            json_start = message_content.find('{')
-            json_end = message_content.rfind('}') + 1
-            json_str = message_content[json_start:json_end]
-
-            # Attempt to parse the JSON
-            evaluation = json.loads(json_str)
+            evaluation = json.loads(message_content)  # Try loading the cleaned JSON
             return evaluation
-        except (json.JSONDecodeError, ValueError) as e:
-            
-            traceback.print_exc()
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error: {e}")
+            print(f"Extracted JSON content: {cleaned_json_content}")
             return None
-
+   
     except Exception as e:
-        # st.error(f"Error evaluating transcription: {e}")
-        traceback.print_exc()
+        print(f"Error: {e}")
         return None
+
+# # Function to evaluate transcription using OpenAI
+# # def evaluate_transcription_with_openai(text):
+#     import traceback
+#     tools = [
+#         {
+#             "type": "function",
+#             "function": {
+#                 "name": "call_audit",
+#                 "description": "You are a function who will do the audit on the calls",
+#                 "parameters": {
+#                     "type": "object",
+#                     "properties": {
+#                         "pitch_followed": {"type": "integer", "description": "This measures how well the sales representative understands and articulates the details of the flats being offered."},
+#                         "confidence": {"type": "integer", "description": "This reflects how well the sales agent is able to address and clarify the doubts of the prospect."},
+#                         "tonality": {"type": "integer", "description": "This includes the tone in which the sales representative is speaking and how well they manage the tone throughout the conversation."},
+#                         "energy": {"type": "integer", "description": "This measures the level of enthusiasm and energy the sales representative exhibits during the call."},
+#                         "enthusiasm": {"type": "integer", "description": "This reflects the sales representative's eagerness and interest in discussing the flats."},
+#                         "customer_understanding": {"type": "integer", "description": "This reflects the representative's ability to understand the customer's needs, problems, and concerns."},
+#                         "communication_skills": {"type": "integer", "description": "This includes the clarity, tone, pace, use of persuasive language, and active listening."},
+#                         "objection_handling": {"type": "integer", "description": "This measures the representative's ability to address customer objections effectively."},
+#                         "closing_skills": {"type": "integer", "description": "This measures the representative's ability to guide the conversation towards a sale or next step."},
+#                         "Overall Score": {"type": "integer", "description": "Your ultimate goal is to evaluate all the scores and give them an overall score."},
+#                         "conclusion": {"type": "string", "description": "Your ultimate goal is to evaluate the salesperson's performance and give them points for improvement."}
+#                     },
+#                     "additionalProperties": False,
+#                     "required": [
+#                         "pitch_followed",
+#                         "confidence",
+#                         "tonality",
+#                         "energy",
+#                         "enthusiasm",
+#                         "customer_understanding",
+#                         "communication_skills",
+#                         "objection_handling",
+#                         "closing_skills",
+#                         "Overall Score",
+#                         "conclusion"
+#                     ]
+#                 },
+#                 "strict": True
+#             }
+#         }
+#     ]
+
+#     tool_prompt = f"""
+#     tools={json.dumps(tools, indent=4)},
+#     response_format={{
+#         "type": "text"
+#     }}
+#     """
+
+#     prompt = f"""
+# Based on the following transcription of a sales call, perform the call audit using the provided tool.
+
+# For each of the following aspects:
+# - pitch_followed
+# - confidence
+# - tonality
+# - energy
+# - enthusiasm
+# - customer_understanding
+# - communication_skills
+# - objection_handling
+# - closing_skills
+
+# Provide a detailed conclusion that includes feedback on how the salesperson performed in each aspect. For each part, explain what they did well, where they lacked, and how they could improve.
+
+# Transcription:
+# "{text}"
+
+# Use the provided tool and output the evaluation as JSON.
+# """
+
+#     try:
+#         response = client1.chat.completions.create(
+#             model="gpt-4o",
+#             messages=[
+#                 {"role": "system", "content": tool_prompt},
+#                 {"role": "user", "content": prompt}
+#             ],
+#             temperature=0.4,
+#             max_tokens=1000
+#         )
+        
+#         message_content = response.choices[0].message.content
+        
+#         # Separate conclusion from the rest of the response
+#         conclusion_match = re.search(r'"conclusion":\s*"(.*?)"', message_content, re.DOTALL)
+#         if conclusion_match:
+#             conclusion = conclusion_match.group(1)  # Extract conclusion text
+#             # Remove conclusion from the JSON string to parse the rest
+#             message_content_without_conclusion = re.sub(r'"conclusion":\s*"(.*?)"', '', message_content)
+#         else:
+#             conclusion = None
+#             message_content_without_conclusion = message_content
+
+#         # Extract and clean JSON from the remaining content
+#         json_match = re.search(r'\{.*\}', message_content_without_conclusion, re.DOTALL)
+#         if json_match:
+#             json_content = json_match.group(0)
+#             cleaned_json_content = clean_json_string(json_content)
+#             try:
+#                 # Parse the cleaned JSON string
+#                 evaluation = json.loads(cleaned_json_content)
+#                 evaluation['conclusion'] = conclusion  # Add conclusion back separately
+#                 return evaluation
+#             except json.JSONDecodeError as e:
+#                 print(f"JSON decode error: {e}")
+#                 print(f"Extracted JSON content: {cleaned_json_content}")
+#                 return None
+#         else:
+#             print("No valid JSON content found in the response.")
+#             return None
+#     except Exception as e:
+#         print(f"Error during OpenAI API call: {e}")
+#         return None
+
+
+
+
+
+
+
+
+
+
+
+
+
+#         # Clean the response to extract JSON
+#         # try:
+#             # Find the JSON part in the response
+#             # json_start = message_content.find('{')
+#             # json_end = message_content.rfind('}') + 1
+#             # json_str = message_content[json_start:json_end]
+
+#             # Attempt to parse the JSON
+#         #    if message_content:
+#         #     sanitized_content = message_content.replace("\n", "\\n")
+#         #     try:
+#         #         evaluation = json.loads(sanitized_content)
+#         #         return evaluation
+#         #     except json.JSONDecodeError as e:
+#         #         print(f"JSON decode error: {e}")
+#         #         print(f"Sanitized message content: {sanitized_content}")
+#         #         return None  # Handle the error as needed
+#         #     else:
+#         #         print("Received empty message content from OpenAI.")
+#         #         return None
+            
+#         #     traceback.print_exc()
+#         #     return None
+
+#         # except Exception as e:
+#         # # st.error(f"Error evaluating transcription: {e}")
+#         #     traceback.print_exc()
+#         #     return None
+#     except Exception as e:
+#         print(e)
 
 
 # Function to insert call log into MongoDB
