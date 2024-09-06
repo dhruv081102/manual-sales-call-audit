@@ -20,8 +20,7 @@ collection_name = "automate"
 
 
 # URL and headers for the Knowlarity API
-url = "https://kpi.knowlarity.com/Basic/v1/account/calllog?start_time=2024-08-28%2012%3A44%3A06%2B05%3A30&end_time=2024-08-29%2012%3A44%3A06%2B05%3A30"
-
+url = "your super receptionist api"
 headers = {
     'authorization': "your sr key",
     'x-api-key': "your x-api-key"
