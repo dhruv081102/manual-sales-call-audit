@@ -1,0 +1,321 @@
+import requests
+import os
+import re
+import json
+from pymongo import MongoClient
+from pymongo.errors import PyMongoError
+import sys
+from dotenv import load_dotenv
+import openai
+
+load_dotenv()
+openai_api_key = os.getenv("OPENAI_API_KEY1")
+client1 = openai.OpenAI(api_key=openai_api_key)
+
+
+# MongoDB connection details
+mongodb_uri = "mongodb+srv://<username>:<password>@cluster0.fhkve.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+database_name = "your database name"
+collection_name = "your collection name"
+
+
+
+# URL and headers for the Knowlarity API
+url = "https://kpi.knowlarity.com/Basic/v1/account/calllog?start_time=2024-08-28%2012%3A44%3A06%2B05%3A30&end_time=2024-08-29%2012%3A44%3A06%2B05%3A30"
+
+headers = {
+    'authorization': "your authorization/sr key",
+    'x-api-key': "your x-api key"
+}
+
+# Function to sanitize filenames
+def sanitize_filename(filename):
+    return re.sub(r'[<>:"/\\|?*]', '_', filename)
+
+# Function to download and save the audio file
+def download_and_store_audio(url, file_path):
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        
+        with open(file_path, 'wb') as file:
+            for chunk in response.iter_content(chunk_size=8192): 
+                file.write(chunk)
+        print(f"Successfully downloaded and saved: {file_path}")
+        return file_path
+    except requests.RequestException as e:
+        print(f"Error downloading file from {url}: {e}")
+        return None
+
+# Function to transcribe audio files using OpenAI's Whisper API
+def transcribe_audio(file_path, openai_api_key):
+    url = 'https://api.openai.com/v1/audio/transcriptions'
+    
+    if not file_path.lower().endswith(('.wav', '.mp3', '.m4a')):
+        raise ValueError(f"File {file_path} is not an audio file.")
+
+    with open(file_path, 'rb') as file:
+        files = {
+            'file': (os.path.basename(file_path), file, 'application/octet-stream')
+        }
+        headers = {
+            'Authorization': f'Bearer {openai_api_key}'
+        }
+        data = {
+            'model': 'whisper-1',
+            'language': 'en'
+        }
+
+        response = requests.post(url, headers=headers, data=data, files=files)
+        
+        if response.status_code == 200:
+            result = response.json()
+            text = result.get('text', '')
+            print(f"Transcription: {text}")
+            return {"text": text}  # Return transcription text only
+        else:
+            error_message = response.json().get('error', {}).get('message', 'Unknown error')
+            raise Exception(f"Error transcribing audio file: {error_message}")
+def clean_json_string(json_string):
+    # Ensure proper double quotes around property names
+    json_string = re.sub(r'(?<!\\)\'', '\"', json_string)  # Replace single quotes with double quotes
+    json_string = json_string.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+    return json_string
+def evaluate_transcription_with_openai(text):
+    import traceback
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "call_audit",
+                "description": "You are a function who will do the audit on the calls",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "pitch_followed": {"type": "integer", "description": "This measures how well the sales representative understands and articulates the details of the flats being offered."},
+                        "confidence": {"type": "integer", "description": "This reflects how well the sales agent is able to address and clarify the doubts of the prospect."},
+                        "tonality": {"type": "integer", "description": "This includes the tone in which the sales representative is speaking and how well they manage the tone throughout the conversation."},
+                        "energy": {"type": "integer", "description": "This measures the level of enthusiasm and energy the sales representative exhibits during the call."},
+                        "enthusiasm": {"type": "integer", "description": "This reflects the sales representative's eagerness and interest in discussing the flats."},
+                        "customer_understanding": {"type": "integer", "description": "This reflects the representative's ability to understand the customer's needs, problems, and concerns."},
+                        "communication_skills": {"type": "integer", "description": "This includes the clarity, tone, pace, use of persuasive language, and active listening."},
+                        "objection_handling": {"type": "integer", "description": "This measures the representative's ability to address customer objections effectively."},
+                        "closing_skills": {"type": "integer", "description": "This measures the representative's ability to guide the conversation towards a sale or next step."},
+                        "Overall_Score": {"type": "float", "description": "Your ultimate goal is to evaluate all the scores and give them an overall score."},
+                        "conclusion": {"type": "string", "description": "Your ultimate goal is to evaluate the salesperson's performance and give them points for improvement."}
+                    },
+                    "additionalProperties": False,
+                    "required": [
+                        "pitch_followed",
+                        "confidence",
+                        "tonality",
+                        "energy",
+                        "enthusiasm",
+                        "customer_understanding",
+                        "communication_skills",
+                        "objection_handling",
+                        "closing_skills",
+                        "Overall_Score",
+                        "conclusion"
+                    ]
+                },
+                "strict": True
+            }
+        }
+    ]
+
+    tool_prompt = f"""
+    tools={json.dumps(tools, indent=4)},
+    response_format={{
+        "type": "text"
+    }}
+    """
+
+    prompt = f"""
+Based on the following transcription of a sales call, perform the call audit using the provided tool.
+
+For each of the following aspects:
+- pitch_followed
+- confidence
+- tonality
+- energy
+- enthusiasm
+- customer_understanding
+- communication_skills
+- objection_handling
+- closing_skills
+
+Provide a detailed conclusion that includes feedback in pointer along with the score on each aspects and how the salesperson performed for each part of the aspect give score and explain what they did well, where they lacked, and how they could improve.
+
+Transcription:
+"{text}"
+
+
+Please format your response as a valid JSON object. Ensure that all property names and values are enclosed in double quotes, and do not include any extraneous characters or newlines outside the JSON object.
+Also make sure it should show the score of each aspects first as an object then to give a detailed brief feedback using real time sentences from the transcripts for each aspect below their scores and give a 3-4 line explanation based on the conversation from the transcript where it should pick real time sentences used in the conversation and based on that is should evaluate on how the salesperson performed for each part of the aspect on the basis of how well did they do, where they lacked, and how they could improve.
+Response JSON:
+
+    "pitch_followed": <score>,
+    "confidence": <score>,
+    "tonality": <score>,
+    "energy": <score>,
+    "enthusiasm": <score>,
+    "customer_understanding": <score>,
+    "communication_skills": <score>,
+    "objection_handling": <score>,
+    "closing_skills": <score>,
+    "Overall_Score": <score>,
+    "conclusion": "<detailed_feedback>"
+    "feedback": "<detailed feedback where it should specifically show the score of each aspects first after which using the transcript it should give a detailed explanation using real sentences from the transcript as an example on how the salesperson performed for each part of the aspect on the basis of how well they spoke, where they lacked, and how could they improve>
+"""
+
+    try:
+        response = client1.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": tool_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.4,
+            max_tokens=1000
+        )
+        
+        message_content = response.choices[0].message.content
+        print(message_content)
+        
+        try:
+            evaluation = json.loads(message_content)  # Try loading the cleaned JSON
+            return evaluation
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error: {e}")
+            print(f"Extracted JSON content: {cleaned_json_content}")
+            return None
+   
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+
+
+# Function to insert call log into MongoDB
+def insert_call_log_to_mongodb(client, database_name, collection_name, data):
+    try:
+        db = client[database_name]
+        collection = db[collection_name]
+        result = collection.insert_one(data)
+        print(f"Inserted document with _id: {result.inserted_id}")
+    except PyMongoError as e:
+        print(f"Error inserting document into MongoDB: {e}")
+
+def main():
+    # Create a directory for saving audio files if it doesn't exist
+    output_directory = "call_recording"
+    os.makedirs(output_directory, exist_ok=True)
+
+    # Fetching the call logs
+    try:
+        response = requests.get(url, headers=headers)
+    except requests.RequestException as e:
+        print(f"Failed to connect to Knowlarity API: {e}")
+        sys.exit(1)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        try:
+            call_logs = response.json()  # Parse the JSON response
+            logs_list = call_logs.get("objects", [])
+            
+            if not logs_list:
+                print("No call logs found.")
+                return
+
+            # Connect to MongoDB
+            try:
+                client = MongoClient(mongodb_uri)
+                client.admin.command('ping')  # Verify connection
+                print("Connected to MongoDB successfully.")
+            except PyMongoError as e:
+                print(f"Failed to connect to MongoDB: {e}")
+                sys.exit(1)
+
+            # Retrieve OpenAI API key from environment variable
+            
+            
+            if not openai_api_key:
+                print("OpenAI API key not found. Please set the 'OPENAI_API_KEY' environment variable.")
+                sys.exit(1)
+
+            for log in logs_list:
+                call_recording_url = log.get("call_recording")
+                
+                if call_recording_url:
+                    output_data = {
+                        "customer_number": log.get("customer_number", "NA"),
+                        "uuid": log.get("uuid", "NA"),
+                        "agent_number": log.get("agent_number", "NA"),
+                        "call_duration": log.get("call_duration", 0),
+                        "business_call_type": log.get("business_call_type", "NA"),
+                        "id": log.get("id", 0),
+                        "order_id": log.get("order_id", 0),
+                        "destination": log.get("destination", ""),
+                        "Call_Type": log.get("Call_Type", 0),
+                        "call_recording": call_recording_url,
+                        "knowlarity_number": log.get("knowlarity_number", "NA"),
+                        "start_time": log.get("start_time", "NA"),
+                        "credits_deducted": log.get("credits_deducted", "0"),
+                        "extension": log.get("extension", ""),
+                        "caller_name": log.get("caller_name", ""),
+                        "timezone_offset": log.get("timezone_offset", "+0000")
+                    }
+                    
+                    # Generate a sanitized file name from the call UUID instead of the full URL
+                    file_name = sanitize_filename(f"{log.get('uuid', 'unknown')}.mp3")
+                    file_path = os.path.join(output_directory, file_name)
+                    
+                    # Download and save the audio file
+                    downloaded_file = download_and_store_audio(call_recording_url, file_path)
+                    
+                    if downloaded_file:
+                        try:
+                            # Transcribe the audio file
+                            transcription_result = transcribe_audio(downloaded_file, openai_api_key)
+                            
+                            # Add transcription result to output data
+                            output_data.update({
+                                "transcription_text": transcription_result["text"]
+                            })
+
+                            # Perform evaluation on the transcription
+                            evaluation_result = evaluate_transcription_with_openai(transcription_result["text"])
+
+                            # Add evaluation result to output data
+                            output_data.update({
+                                "evaluation": evaluation_result
+                            })
+                            
+                        except Exception as e:
+                            print(f"Error processing transcription or evaluation for {file_name}: {e}")
+                            # Optionally, you can decide whether to continue or skip insertion
+                            # For now, we'll proceed without transcription and evaluation data
+                        
+                    else:
+                        print(f"Skipping transcription and evaluation for {file_name} due to download failure.")
+                    
+                    # Insert the call log along with transcription and evaluation data into MongoDB
+                    insert_call_log_to_mongodb(client, database_name, collection_name, output_data)
+            
+            # Close MongoDB connection
+            client.close()
+            print("Closed MongoDB connection.")
+
+        except ValueError:
+            print("Failed to parse JSON response from Knowlarity API.")
+    else:
+        print(f"Failed to fetch call logs: {response.status_code} - {response.text}")
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
